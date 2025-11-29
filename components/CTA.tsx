@@ -28,7 +28,7 @@ const CTA: React.FC<CTAProps> = ({ onNavigate }) => {
             Hiring Process?
           </h2>
           <p className="text-gray-400 mb-10 text-sm md:text-base max-w-xl mx-auto">
-            Join thousands of recruiters who trust SelectAI to find their next star employee.
+            Join thousands of recruiters who trust ALIGN to find their next star employee.
           </p>
           
           <div className="flex flex-col gap-3 items-center">

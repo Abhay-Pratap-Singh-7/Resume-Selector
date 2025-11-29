@@ -28,7 +28,7 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate }) => {
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo - Text Only */}
         <a href="#" className="flex items-center gap-2 group">
-          <span className="text-white group-hover:text-[#FFCB74] transition-colors font-['Syne'] font-bold text-2xl tracking-tight">SelectAI</span>
+          <span className="text-white group-hover:text-[#FFCB74] transition-colors font-['Syne'] font-bold text-2xl tracking-tight">ALIGN</span>
         </a>
 
         {/* Desktop Links */}

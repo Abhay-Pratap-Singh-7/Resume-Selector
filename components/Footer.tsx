@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Twitter, Linkedin, Facebook, Instagram, Github } from 'lucide-react';
 
 interface FooterProps {
@@ -14,7 +14,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           {/* Brand Column */}
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 font-['Syne'] font-bold text-2xl tracking-tight text-white mb-6">
-              <span>SelectAI</span>
+              <span>ALIGN</span>
             </div>
             <div className="flex gap-4 text-gray-400">
                 <button onClick={onNavigate} className="hover:text-white"><Twitter size={18} /></button>
@@ -60,7 +60,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
         </div>
 
         <div className="pt-8 border-t border-[#2F2F2F] flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-[10px] text-gray-500">Copyright © 2024 SelectAI. All rights reserved.</p>
+            <p className="text-[10px] text-gray-500">Copyright © 2024 ALIGN. All rights reserved.</p>
             <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
                 <span className="text-[10px] text-green-500">All systems normal</span>

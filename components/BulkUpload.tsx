@@ -1,17 +1,81 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileText, X, ArrowLeft, CheckCircle2, Loader2, Briefcase } from 'lucide-react';
+import { UploadCloud, FileText, X, ArrowLeft, CheckCircle2, Loader2, Briefcase, AlertCircle, Play, Sparkles } from 'lucide-react';
 
 interface BulkUploadProps {
   onBack: () => void;
 }
 
+// --- Types ---
+type FileStatus = 'queued' | 'processing' | 'completed' | 'error';
+
+// Updated interface to match your FastAPI backend response
+interface AnalysisResult {
+  name: string;                // <-- NEW
+  pass_or_fail: string;
+  score: number;
+  explanation: string;
+  strengths: string[];
+  weaknesses: string[];
+}
+
+interface FileItem {
+  id: string;
+  file: File;
+  status: FileStatus;
+  result?: AnalysisResult;
+  errorMessage?: string;
+}
+
+// --- Backend Integration Guide ---
+// 1. Locate your FastAPI endpoint URL (e.g., http://localhost:8000/analyze).
+// 2. Ensure your backend accepts 'multipart/form-data' with the key 'file'.
+// 3. Replace the mock implementation below with the fetch code provided in comments.
+
+const uploadFileToBackend = async (file: File, jobRole: string): Promise<AnalysisResult> => {
+  console.log(`Uploading ${file.name} for role: ${jobRole}...`);
+
+  const formData = new FormData();
+  formData.append("job_role", jobRole);   // ✔ REQUIRED by your backend
+  formData.append("resume", file);        // ✔ REQUIRED by your backend
+
+  try {
+    const response = await fetch("https://resume-48qd.onrender.com/evaluate", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Server Error: ${response.status} → ${text}`);
+    }
+
+    const data = await response.json();
+    console.log("Backend result:", data);
+    return data as AnalysisResult;
+  } catch (error) {
+    console.error("Upload failed:", error);
+    throw error;
+  }
+};
+
+
 const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
   const [jobRole, setJobRole] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadComplete, setUploadComplete] = useState(false);
+  const [fileItems, setFileItems] = useState<FileItem[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // --- File Handling ---
+
+  const addFiles = (newFiles: File[]) => {
+    const newItems: FileItem[] = newFiles.map(file => ({
+      id: Math.random().toString(36).substring(7),
+      file,
+      status: 'queued'
+    }));
+    setFileItems(prev => [...prev, ...newItems]);
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -27,224 +91,306 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files) {
-        const newFiles = Array.from(e.dataTransfer.files).filter(file => file.type === 'application/pdf');
-        setFiles(prev => [...prev, ...newFiles]);
+      const validFiles = Array.from(e.dataTransfer.files).filter(file => file.type === 'application/pdf');
+      addFiles(validFiles);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-        const newFiles = Array.from(e.target.files).filter(file => file.type === 'application/pdf');
-        setFiles(prev => [...prev, ...newFiles]);
+      const validFiles = Array.from(e.target.files).filter(file => file.type === 'application/pdf');
+      addFiles(validFiles);
     }
   };
 
-  const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+  const removeFile = (id: string) => {
+    setFileItems(prev => prev.filter(item => item.id !== id));
   };
 
-  const handleUpload = () => {
-    setIsUploading(true);
-    // Simulate upload delay
-    setTimeout(() => {
-        setIsUploading(false);
-        setUploadComplete(true);
-    }, 2000);
+  // --- Processing Logic (One by One) ---
+
+  const processQueue = async () => {
+    if (!jobRole) return;
+    setIsProcessing(true);
+
+    // Get all queued IDs at the start
+    const idsToProcess = fileItems
+        .filter(item => item.status === 'queued' || item.status === 'error')
+        .map(item => item.id);
+
+    // Sequential Loop
+    for (const id of idsToProcess) {
+      // 1. Update status to PROCESSING
+      setFileItems(prev => prev.map(item => 
+        item.id === id ? { ...item, status: 'processing' } : item
+      ));
+
+      // Get the current file object (from state ref not strictly necessary as file obj is stable)
+      const currentItem = fileItems.find(i => i.id === id);
+      
+      if (currentItem.file) {
+          try {
+            // 2. Call Backend (Waits for response)
+            const result = await uploadFileToBackend(currentItem.file, jobRole);
+            
+            // 3. Update status to COMPLETED with result immediately
+            setFileItems(prev => prev.map(item => 
+                item.id === id ? { ...item, status: 'completed', result } : item
+            ));
+          } catch (error) {
+            // 4. Handle Error
+            setFileItems(prev => prev.map(item => 
+                item.id === id ? { ...item, status: 'error', errorMessage: 'Analysis failed' } : item
+            ));
+          }
+      }
+      
+      // Short delay for visual smoothness between items
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    setIsProcessing(false);
   };
 
-  if (uploadComplete) {
-      return (
-          <div className="min-h-screen bg-[#111111] text-[#F6F6F6] flex flex-col items-center justify-center p-6 relative overflow-hidden">
-               {/* Background effects */}
-               <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-                  <div 
-                      className="absolute inset-0 opacity-[0.02]" 
-                      style={{ 
-                          backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', 
-                          backgroundSize: '25px 25px' 
-                      }}
-                  ></div>
-                   {/* Top Left - Golden Grid Patch */}
-                  <div 
-                       className="absolute top-0 left-0 w-full h-[40%] opacity-[0.1]"
-                       style={{
-                          backgroundImage: 'linear-gradient(#FFCB74 1px, transparent 1px), linear-gradient(90deg, #FFCB74 1px, transparent 1px)',
-                          backgroundSize: '50px 50px',
-                          maskImage: 'radial-gradient(circle at 20% 20%, black, transparent 70%)',
-                          WebkitMaskImage: 'radial-gradient(circle at 20% 20%, black, transparent 70%)'
-                       }}
-                  ></div>
-                  <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[50%] bg-[#FFCB74] opacity-[0.05] rounded-full blur-[150px] animate-pulse-glow"></div>
-                  <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#FFCB74] opacity-[0.05] rounded-full blur-[150px]"></div>
-               </div>
-               
-               <div className="bg-[#1a1a1a] border border-[#2F2F2F] rounded-3xl p-10 max-w-lg w-full text-center relative z-10 shadow-2xl animate-fade-in-up">
-                   <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-green-500/20">
-                       <CheckCircle2 size={40} className="text-green-500" />
-                   </div>
-                   <h2 className="text-3xl font-bold mb-4 text-white">Upload Complete</h2>
-                   <p className="text-gray-400 mb-8 leading-relaxed">
-                       Successfully processed <span className="text-[#FFCB74] font-bold">{files.length} resumes</span> for the role of <span className="text-white font-semibold">{jobRole}</span>.
-                   </p>
-                   <button onClick={onBack} className="w-full bg-[#FFCB74] hover:bg-[#eebb55] text-[#111111] font-bold py-3.5 rounded-xl transition-all shadow-lg hover:shadow-[0_0_20px_rgba(255,203,116,0.3)]">
-                       Return to Dashboard
-                   </button>
-               </div>
-          </div>
-      )
-  }
+  const completedCount = fileItems.filter(i => i.status === 'completed').length;
+  const totalCount = fileItems.length;
 
   return (
-    <div className="min-h-screen bg-[#111111] text-[#F6F6F6] p-6 relative flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-[#111111] text-[#F6F6F6] p-6 relative flex flex-col overflow-x-hidden">
        {/* Background */}
-       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-            {/* 1. Base Grid */}
-            <div 
-                className="absolute inset-0 opacity-[0.03]" 
-                style={{ 
-                    backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', 
-                    backgroundSize: '50px 50px' 
-                }}
-            ></div>
-
-            {/* 2. Highlight Grid Patches */}
-            {/* Top Left - Golden Grid Patch */}
-            
-
-            {/* 3. Glow Orbs */}
-          <div className="absolute top-[-5%] left-[-10%] w-[50vw] h-[50vw] bg-[#FFCB74] opacity-[0.09] rounded-full blur-[100px]" style={{animationDelay: '2s'}}></div>
-          <div className="absolute top-[5%] right-[-10%] w-[40vw] h-[40vw] bg-[#FFCB74] opacity-[0.08] rounded-full blur-[100px]" style={{animationDelay: '2s'}}></div>
+       <div className="absolute inset-0 pointer-events-none z-0">
+            <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '50px 50px' }}></div>
+            <div className="absolute top-[-5%] left-[-10%] w-[50vw] h-[50vw] bg-[#FFCB74] opacity-[0.05] rounded-full blur-[100px]"></div>
        </div>
 
-       <div className="relative z-10 max-w-5xl mx-auto w-full flex-1 flex flex-col justify-center py-10">
-           <button onClick={onBack} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8 self-start group">
-               <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back to Home
-           </button>
-
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start">
-               
-               {/* Left: Info & Form */}
-               <div className="space-y-8 animate-slide-up" style={{animationDelay: '0.1s'}}>
-                   <div>
-                       <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">Upload Resumes</h1>
-                       <p className="text-gray-400 text-lg leading-relaxed">Select the job role and upload candidate CVs to start the AI screening process.</p>
-                   </div>
-                   
-                   <div className="space-y-4">
-                       <label className="block text-sm font-medium text-gray-300 ml-1">Target Job Role</label>
-                       <div className="relative group">
-                           <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-[#FFCB74] transition-colors" size={18} />
-                           <input 
-                               type="text" 
-                               value={jobRole}
-                               onChange={(e) => setJobRole(e.target.value)}
-                               placeholder="e.g. Senior Product Designer"
-                               className="w-full bg-[#1a1a1a] border border-[#2F2F2F] rounded-xl py-4 pl-12 pr-4 text-white placeholder-gray-600 focus:border-[#FFCB74] focus:ring-1 focus:ring-[#FFCB74] focus:outline-none transition-all"
-                           />
-                       </div>
-                   </div>
-
-                   <div className="bg-[#1a1a1a]/50 border border-[#2F2F2F] rounded-xl p-6 backdrop-blur-sm">
-                       <h3 className="font-bold mb-3 text-white flex items-center gap-2">
-                           <div className="w-1.5 h-1.5 rounded-full bg-[#FFCB74]"></div> Upload Guidelines
-                       </h3>
-                       <ul className="space-y-3 text-sm text-gray-400">
-                           <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#2F2F2F] fill-[#FFCB74]" /> Supported format: PDF only</li>
-                           <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#2F2F2F] fill-[#FFCB74]" /> Max file size: 10MB per file</li>
-                           <li className="flex items-center gap-2.5"><CheckCircle2 size={16} className="text-[#2F2F2F] fill-[#FFCB74]" /> Multiple file upload supported</li>
-                       </ul>
-                   </div>
-               </div>
-
-               {/* Right: Upload Area */}
-               <div className="bg-[#1a1a1a] border border-[#2F2F2F] rounded-2xl p-6 shadow-2xl animate-slide-up flex flex-col h-full min-h-[500px]" style={{animationDelay: '0.2s'}}>
-                   
-                   {/* Dropzone */}
-                   <div 
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 flex-shrink-0
-                            ${isDragging 
-                                ? 'border-[#FFCB74] bg-[#FFCB74]/5 scale-[1.02]' 
-                                : 'border-[#2F2F2F] hover:border-gray-500 hover:bg-[#252525]'
-                            }
-                        `}
-                   >
-                       <input 
-                           type="file" 
-                           ref={fileInputRef} 
-                           className="hidden" 
-                           multiple 
-                           accept=".pdf" 
-                           onChange={handleFileSelect} 
-                       />
-                       <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 border transition-colors ${isDragging ? 'bg-[#FFCB74]/20 border-[#FFCB74] text-[#FFCB74]' : 'bg-[#111] border-[#2F2F2F] text-gray-400'}`}>
-                           <UploadCloud size={32} />
-                       </div>
-                       <p className="font-medium text-white mb-1">Click or drag PDF files here</p>
-                       <p className="text-xs text-gray-500">Maximum file size 10MB</p>
-                   </div>
-
-                   {/* File List */}
-                   <div className="mt-6 flex-1 flex flex-col min-h-0">
-                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center justify-between">
-                           <span>Selected Files</span>
-                           <span className="bg-[#2F2F2F] px-2 py-0.5 rounded text-white">{files.length}</span>
-                       </p>
-                       
-                       <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar min-h-[120px]">
-                           {files.length === 0 ? (
-                               <div className="h-full flex flex-col items-center justify-center text-gray-600 italic text-sm border border-[#2F2F2F] border-dashed rounded-lg bg-[#111]/50">
-                                   No files selected yet
-                               </div>
-                           ) : (
-                               files.map((file, index) => (
-                                   <div key={index} className="flex items-center justify-between bg-[#111] border border-[#2F2F2F] p-3 rounded-lg group hover:border-gray-600 transition-colors animate-fade-in-up" style={{animationDelay: `${index * 0.05}s`}}>
-                                       <div className="flex items-center gap-3 overflow-hidden">
-                                           <div className="w-8 h-8 rounded bg-red-500/10 flex items-center justify-center text-red-500 flex-shrink-0 border border-red-500/20">
-                                               <FileText size={16} />
-                                           </div>
-                                           <div className="min-w-0">
-                                               <p className="text-sm text-gray-200 truncate font-medium">{file.name}</p>
-                                               <p className="text-[10px] text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                                           </div>
-                                       </div>
-                                       <button 
-                                           onClick={(e) => { e.stopPropagation(); removeFile(index); }}
-                                           className="p-1.5 hover:bg-red-500/20 text-gray-500 hover:text-red-500 rounded-md transition-colors"
-                                       >
-                                           <X size={16} />
-                                       </button>
-                                   </div>
-                               ))
-                           )}
-                       </div>
-                   </div>
-
-                   {/* Action Button */}
-                   <button 
-                       onClick={handleUpload}
-                       disabled={files.length === 0 || !jobRole || isUploading}
-                       className={`w-full mt-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all transform active:scale-[0.98]
-                           ${files.length > 0 && jobRole && !isUploading
-                               ? 'bg-[#FFCB74] hover:bg-[#eebb55] text-[#111111] shadow-[0_0_20px_rgba(255,203,116,0.2)] hover:shadow-[0_0_30px_rgba(255,203,116,0.4)]'
-                               : 'bg-[#2F2F2F] text-gray-500 cursor-not-allowed'
-                           }
-                       `}
-                   >
-                       {isUploading ? (
-                           <>
-                               <Loader2 size={20} className="animate-spin" /> Processing...
-                           </>
-                       ) : (
-                           'Analyze Candidates'
-                       )}
-                   </button>
-
+       <div className="relative z-10 max-w-7xl mx-auto w-full flex-1 flex flex-col py-6">
+           {/* Header */}
+           <div className="flex items-center justify-between mb-8">
+               <button onClick={onBack} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group">
+                   <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back to Home
+               </button>
+               <div className="text-right">
+                   <h1 className="text-2xl font-bold">Bulk Scanner</h1>
+                   <p className="text-xs text-gray-500">Sequential Analysis • Instant Results</p>
                </div>
            </div>
+
+           {/* TOP SECTION: Controls & Dropzone */}
+           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
+               
+               {/* 1. Job Configuration */}
+               <div className="lg:col-span-1 space-y-6">
+                   <div className="bg-[#1a1a1a] border border-[#2F2F2F] rounded-2xl p-6">
+                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                           <Briefcase size={18} className="text-[#FFCB74]" /> Job Context
+                       </h3>
+                       <div className="space-y-4">
+                           <div>
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Job Role</label>
+                               <input 
+                                   type="text" 
+                                   value={jobRole}
+                                   onChange={(e) => setJobRole(e.target.value)}
+                                   placeholder="e.g. Senior Frontend Engineer"
+                                   className="w-full bg-[#111] border border-[#2F2F2F] rounded-lg py-3 px-4 text-white focus:border-[#FFCB74] focus:ring-1 focus:ring-[#FFCB74] outline-none transition-all"
+                               />
+                           </div>
+                           <div className="p-3 bg-[#FFCB74]/5 border border-[#FFCB74]/20 rounded-lg">
+                               <p className="text-xs text-[#FFCB74] leading-relaxed">
+                                   <strong>Config:</strong> Enter the role title to help the AI contextualize the resume scoring.
+                               </p>
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* Stats / Start Button */}
+                   {fileItems.length > 0 && (
+                        <div className="bg-[#1a1a1a] border border-[#2F2F2F] rounded-2xl p-6 animate-fade-in-up">
+                            <div className="flex justify-between items-center mb-4">
+                                <span className="text-sm text-gray-400">Queue Status</span>
+                                <span className="text-xs font-mono bg-[#2F2F2F] px-2 py-1 rounded">{completedCount} / {totalCount} Processed</span>
+                            </div>
+                            
+                            {/* Progress Bar */}
+                            <div className="h-2 w-full bg-[#111] rounded-full overflow-hidden mb-6">
+                                <div 
+                                    className="h-full bg-[#FFCB74] transition-all duration-300 ease-linear"
+                                    style={{ width: `${totalCount === 0 ? 0 : (completedCount / totalCount) * 100}%` }}
+                                ></div>
+                            </div>
+
+                            <button 
+                                onClick={processQueue}
+                                disabled={isProcessing || !jobRole}
+                                className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all 
+                                    ${isProcessing 
+                                        ? 'bg-[#2F2F2F] text-gray-500 cursor-not-allowed' 
+                                        : 'bg-[#FFCB74] hover:bg-[#eebb55] text-[#111111] shadow-lg hover:scale-[1.02]'
+                                    }`}
+                            >
+                                {isProcessing ? (
+                                    <><Loader2 size={18} className="animate-spin" /> Analyzing...</>
+                                ) : (
+                                    <><Play size={18} className="fill-current" /> Start Queue</>
+                                )}
+                            </button>
+                        </div>
+                   )}
+               </div>
+
+               {/* 2. Upload Area & Queue List */}
+               <div className="lg:col-span-2 bg-[#1a1a1a] border border-[#2F2F2F] rounded-2xl p-6 flex flex-col h-[500px]">
+                   
+                   {/* Dropzone */}
+                   {!isProcessing && (
+                       <div 
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`flex-shrink-0 border-2 border-dashed rounded-xl p-6 mb-6 flex items-center justify-center gap-4 cursor-pointer transition-all
+                                ${isDragging ? 'border-[#FFCB74] bg-[#FFCB74]/5' : 'border-[#2F2F2F] hover:border-gray-500 hover:bg-[#252525]'}
+                            `}
+                       >
+                           <input type="file" ref={fileInputRef} className="hidden" multiple accept=".pdf" onChange={handleFileSelect} />
+                           <div className="w-12 h-12 rounded-full bg-[#111] flex items-center justify-center text-gray-400">
+                               <UploadCloud size={20} />
+                           </div>
+                           <div className="text-left">
+                               <p className="font-medium text-white text-sm">Click or Drag Resumes (PDF)</p>
+                               <p className="text-xs text-gray-500">Max 10 files recommended for demo</p>
+                           </div>
+                       </div>
+                   )}
+
+                   {/* File List */}
+                   <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                       {fileItems.length === 0 ? (
+                           <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
+                               <FileText size={48} className="mb-2" />
+                               <p className="text-sm">Queue is empty</p>
+                           </div>
+                       ) : (
+                           fileItems.map((item, idx) => (
+                               <div 
+                                    key={item.id} 
+                                    className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-300
+                                        ${item.status === 'processing' ? 'bg-[#FFCB74]/5 border-[#FFCB74]/30' : 
+                                          item.status === 'completed' ? 'bg-green-500/5 border-green-500/20' : 
+                                          item.status === 'error' ? 'bg-red-500/5 border-red-500/20' :
+                                          'bg-[#111] border-[#2F2F2F]'}
+                                    `}
+                               >
+                                   <div className="flex items-center gap-3 overflow-hidden">
+                                       <div className="w-8 h-8 rounded bg-[#1a1a1a] flex items-center justify-center text-gray-500 flex-shrink-0">
+                                            {item.status === 'processing' ? <Loader2 size={14} className="animate-spin text-[#FFCB74]" /> :
+                                             item.status === 'completed' ? <CheckCircle2 size={14} className="text-green-500" /> :
+                                             item.status === 'error' ? <AlertCircle size={14} className="text-red-500" /> :
+                                             <FileText size={14} />}
+                                       </div>
+                                       <div className="min-w-0">
+                                           <p className="text-sm text-gray-200 truncate font-medium">{item.file.name}</p>
+                                           <p className="text-[10px] text-gray-500 capitalize">
+                                                {item.status === 'queued' ? 'Ready to scan' : item.status}
+                                           </p>
+                                       </div>
+                                   </div>
+                                   
+                                   {item.status === 'queued' && (
+                                       <button onClick={() => removeFile(item.id)} className="p-1.5 hover:bg-red-500/20 text-gray-600 hover:text-red-500 rounded-md">
+                                           <X size={14} />
+                                       </button>
+                                   )}
+                                   {item.status === 'completed' && item.result && (
+                                       <span className={`text-xs font-bold px-2 py-1 rounded border ${
+                                           item.result.pass_or_fail === 'pass' 
+                                           ? 'bg-green-500/10 text-green-500 border-green-500/20' 
+                                           : 'bg-red-500/10 text-red-500 border-red-500/20'
+                                       }`}>
+                                           {item.result.pass_or_fail.toUpperCase()}
+                                       </span>
+                                   )}
+                               </div>
+                           ))
+                       )}
+                   </div>
+               </div>
+           </div>
+
+           {/* RESULTS GRID - Appears as items complete */}
+           {completedCount > 0 && (
+               <div className="space-y-6 pb-20">
+                   <div className="flex items-center gap-2 border-b border-[#2F2F2F] pb-4">
+                       <Sparkles size={20} className="text-[#FFCB74]" />
+                       <h2 className="text-xl font-bold">Analysis Results ({completedCount})</h2>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                       {fileItems.filter(i => i.status === 'completed' && i.result).map((item) => (
+                           <div key={item.id} className="bg-[#1a1a1a] border border-[#2F2F2F] rounded-2xl overflow-hidden hover:border-[#FFCB74]/30 transition-all duration-300 animate-slide-up group flex flex-col h-full">
+                               
+                               {/* Card Header */}
+                               <div className="p-5 border-b border-[#2F2F2F] bg-[#1f1f1f] flex justify-between items-start">
+                                   <div className="max-w-[70%]">
+                                    <h3 className="font-bold text-white text-sm truncate">{item.result?.name || item.file.name}</h3>
+                                       <div className="flex items-center gap-2 mt-1">
+                                           <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                                               item.result?.pass_or_fail === 'pass' 
+                                               ? 'bg-green-500/20 text-green-500' 
+                                               : 'bg-red-500/20 text-red-500'
+                                           }`}>
+                                               {item.result?.pass_or_fail}
+                                           </span>
+                                       </div>
+                                   </div>
+                                   <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-xl border font-bold
+                                       ${(item.result?.score || 0) >= 70 ? 'bg-[#FFCB74] text-black border-[#FFCB74]' : 
+                                         'bg-gray-800 text-gray-400 border-gray-700'}
+                                   `}>
+                                       <span className="text-sm">{item.result?.score}</span>
+                                   </div>
+                               </div>
+                               
+                               {/* Body */}
+                               <div className="p-5 space-y-4 flex-1 flex flex-col">
+                                   <div className="bg-[#111] p-3 rounded-lg border border-[#2F2F2F]">
+                                       <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                                           "{item.result?.explanation}"
+                                       </p>
+                                   </div>
+
+                                   <div className="grid grid-cols-1 gap-3 pt-2">
+                                       <div>
+                                           <span className="text-[9px] font-bold text-green-500 uppercase mb-1.5 flex items-center gap-1">
+                                               <CheckCircle2 size={10} /> Strengths
+                                           </span>
+                                           <ul className="space-y-1.5">
+                                               {item.result?.strengths.slice(0, 3).map((p, i) => (
+                                                   <li key={i} className="text-[10px] text-gray-300 flex items-start gap-2 bg-green-500/5 p-1.5 rounded border border-green-500/10">
+                                                        {p}
+                                                   </li>
+                                               ))}
+                                           </ul>
+                                       </div>
+                                       <div>
+                                           <span className="text-[9px] font-bold text-red-500 uppercase mb-1.5 flex items-center gap-1">
+                                               <AlertCircle size={10} /> Weaknesses
+                                           </span>
+                                            <ul className="space-y-1.5">
+                                               {item.result?.weaknesses.slice(0, 3).map((c, i) => (
+                                                   <li key={i} className="text-[10px] text-gray-300 flex items-start gap-2 bg-red-500/5 p-1.5 rounded border border-red-500/10">
+                                                        {c}
+                                                   </li>
+                                               ))}
+                                           </ul>
+                                       </div>
+                                   </div>
+                               </div>
+                           </div>
+                       ))}
+                   </div>
+               </div>
+           )}
        </div>
     </div>
   );

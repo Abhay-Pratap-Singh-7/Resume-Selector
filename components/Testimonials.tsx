@@ -3,7 +3,7 @@ import { Star } from 'lucide-react';
 
 const testimonials = [
   {
-    text: "SelectAI cut our screening time by 90%. We found our Lead Engineer in days, not months. The automated parsing is incredibly accurate.",
+    text: "ALIGN cut our screening time by 90%. We found our Lead Engineer in days, not months. The automated parsing is incredibly accurate.",
     author: "Sarah J.",
     role: "HR Director @ TechFlow",
     image: "https://picsum.photos/40/40?random=1"
@@ -27,7 +27,7 @@ const Testimonials: React.FC = () => {
     <section className="py-24 px-6 max-w-7xl mx-auto">
         <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold mb-4">What our users are saying</h2>
-            <p className="text-gray-400">Discover how SelectAI has transformed hiring workflows for businesses worldwide</p>
+            <p className="text-gray-400">Discover how ALIGN has transformed hiring workflows for businesses worldwide</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

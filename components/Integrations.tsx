@@ -16,7 +16,7 @@ const Integrations: React.FC = () => {
           Seamless integrations <br />
           with your ATS and tools
         </h2>
-        <p className="text-gray-400">SelectAI connects with your existing recruitment pipeline to enhance your workflow.</p>
+        <p className="text-gray-400">ALIGN connects with your existing recruitment pipeline to enhance your workflow.</p>
       </div>
 
       <div className="flex flex-wrap justify-center gap-4 max-w-4xl mx-auto">
