@@ -73,6 +73,32 @@
         from { transform: translateX(-100%); }
         to { transform: translateX(100%); }
       }
+
+      @keyframes fade-in-out-loop {
+        0% { opacity: 0; }
+        50% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+      .animate-fade-in-out {
+        animation: fade-in-out-loop 2.5s ease-in-out infinite;
+      }
+
+      /* Logo Polish Animation */
+      @keyframes polish-slide {
+        0% { background-position: 100% 50%; }
+        40% { background-position: 0% 50%; } /* Slower slide (approx 2s) */
+        100% { background-position: 0% 50%; } /* Hold for rest of 5s */
+      }
+      .logo-polish {
+        background: linear-gradient(135deg, #F6F6F6 45%, #FFCB74 50%, #F6F6F6 55%);
+        background-size: 300% 100%;
+        background-repeat: no-repeat;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        color: transparent;
+        animation: polish-slide 5s ease-in-out infinite;
+      }
       
       .hover-glow-border:hover {
         border-color: rgba(255, 203, 116, 0.5);

@@ -167,7 +167,7 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
            {/* Header */}
            <div className="flex items-center justify-between mb-8">
                <button onClick={onBack} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group">
-                   <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back to Home
+                   <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back to Products
                </button>
                <div className="text-right">
                    <h1 className="text-2xl font-bold">Bulk Scanner</h1>

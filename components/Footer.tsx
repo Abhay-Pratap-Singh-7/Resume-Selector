@@ -1,15 +1,16 @@
+
 import React, { useState } from 'react';
 import { Twitter, Linkedin, Facebook, Instagram, Github } from 'lucide-react';
 
 interface FooterProps {
-  onNavigate: () => void;
+  onNavigate: (page: string) => void;
 }
 
 const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   return (
     <footer className="bg-[#111111] pt-20 pb-10 border-t border-[#2F2F2F] px-6">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-10 mb-16">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-16">
           
           {/* Brand Column */}
           <div className="col-span-2 md:col-span-1">
@@ -17,45 +18,35 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <span>ALIGN</span>
             </div>
             <div className="flex gap-4 text-gray-400">
-                <button onClick={onNavigate} className="hover:text-white"><Twitter size={18} /></button>
-                <button onClick={onNavigate} className="hover:text-white"><Linkedin size={18} /></button>
-                <button onClick={onNavigate} className="hover:text-white"><Facebook size={18} /></button>
-                <button onClick={onNavigate} className="hover:text-white"><Instagram size={18} /></button>
-                <button onClick={onNavigate} className="hover:text-white"><Github size={18} /></button>
+                <button onClick={() => onNavigate('dev')} className="hover:text-white"><Twitter size={18} /></button>
+                <button onClick={() => onNavigate('dev')} className="hover:text-white"><Linkedin size={18} /></button>
+                <button onClick={() => onNavigate('dev')} className="hover:text-white"><Facebook size={18} /></button>
+                <button onClick={() => onNavigate('dev')} className="hover:text-white"><Instagram size={18} /></button>
+                <button onClick={() => onNavigate('dev')} className="hover:text-white"><Github size={18} /></button>
             </div>
           </div>
 
           {/* Links Columns */}
           <div className="flex flex-col gap-4">
             <h4 className="font-bold text-white text-sm">Company</h4>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Blog</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">About</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Contact us</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Careers</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Security</button>
+            <button onClick={() => onNavigate('blog')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Blog</button>
+            <button onClick={() => onNavigate('dev')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">About</button>
+            <button onClick={() => onNavigate('contact')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Contact us</button>
+            <button onClick={() => onNavigate('security')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Security</button>
           </div>
 
           <div className="flex flex-col gap-4">
             <h4 className="font-bold text-white text-sm">Product</h4>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Resume Parsing</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">ATS Integrations</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Pricing</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Partners</button>
+            <button onClick={() => onNavigate('products')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">All Products</button>
+            <button onClick={() => onNavigate('pricing')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Pricing</button>
+            <button onClick={() => onNavigate('dev')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Partners</button>
           </div>
 
           <div className="flex flex-col gap-4">
             <h4 className="font-bold text-white text-sm">Resources</h4>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Help center</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">FAQs</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">User guides</button>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <h4 className="font-bold text-white text-sm">Platform</h4>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Candidate Database</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Analytics</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Infrastructure</button>
-            <button onClick={onNavigate} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Compliance</button>
+            <button onClick={() => onNavigate('help')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">Help center</button>
+            <button onClick={() => onNavigate('faq')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">FAQs</button>
+            <button onClick={() => onNavigate('guide')} className="text-left text-xs text-gray-400 hover:text-[#FFCB74]">User guides</button>
           </div>
         </div>
 
@@ -72,3 +63,4 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
 };
 
 export default Footer;
+    
