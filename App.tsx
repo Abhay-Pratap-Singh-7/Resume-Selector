@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { supabase } from './lib/supabaseClient'; // Import Supabase
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Features from './components/Features';
@@ -17,20 +18,55 @@ import Security from './components/Security';
 import FAQs from './components/FAQs';
 import UserGuide from './components/UserGuide';
 import HelpCenter from './components/HelpCenter';
+import AuthModal from './components/AuthModal'; // Import AuthModal
+import ProfileDashboard from './components/ProfileDashboard'; // Import ProfileDashboard
 
 const App: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState<'home' | 'dev' | 'upload' | 'products' | 'pricing' | 'blog' | 'contact' | 'security' | 'faq' | 'guide' | 'help'>('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'dev' | 'upload' | 'products' | 'pricing' | 'blog' | 'contact' | 'security' | 'faq' | 'guide' | 'help' | 'profile'>('home');
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Auth State
+  const [session, setSession] = useState<any>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  
+  // Session State for History
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
   // Splash screen timer
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 2500); // 2.5s loading time
+    }, 2500); 
     return () => clearTimeout(timer);
   }, []);
 
+  // Supabase Auth Listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const handleNavigation = (page: string) => {
+    // Protected Routes
+    if ((page === 'upload' || page === 'profile') && !session) {
+        setIsAuthModalOpen(true);
+        return;
+    }
+
+    // Reset selected session if navigating to upload manually (New Scan)
+    if (page === 'upload') {
+        setSelectedSessionId(null);
+    }
+
     switch (page) {
       case 'home':
         setCurrentPage('home');
@@ -54,6 +90,10 @@ const App: React.FC = () => {
         break;
       case 'dev':
         setCurrentPage('dev');
+        window.scrollTo(0, 0);
+        break;
+      case 'profile':
+        setCurrentPage('profile');
         window.scrollTo(0, 0);
         break;
       // New Pages
@@ -83,19 +123,44 @@ const App: React.FC = () => {
     }
   };
 
+  const handleOpenSession = (sessionId: string) => {
+      setSelectedSessionId(sessionId);
+      setCurrentPage('upload');
+      window.scrollTo(0, 0);
+  };
+
+  const handleSignOut = async () => {
+      await supabase.auth.signOut();
+      setSession(null);
+      handleNavigation('home');
+  };
+
   // Standalone pages (No Navbar/Footer)
   if (currentPage === 'dev') {
     return <UnderDevelopment onBack={() => handleNavigation('home')} />;
   }
 
   if (currentPage === 'upload') {
-    return <BulkUpload onBack={() => handleNavigation('products')} />;
+    return <BulkUpload onBack={() => handleNavigation('profile')} session={session} initialSessionId={selectedSessionId} />;
   }
 
   // Layout with Navbar & Footer
   return (
     <div className="relative min-h-screen bg-[#111111] text-[#F6F6F6] overflow-x-hidden selection:bg-[#FFCB74] selection:text-[#111111]">
       
+      {/* AUTH MODAL */}
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)} 
+        onLoginSuccess={() => {
+            // Close modal immediately
+            setIsAuthModalOpen(false);
+            // Directly navigate to profile to avoid race conditions with session state
+            setCurrentPage('profile');
+            window.scrollTo(0, 0);
+        }}
+      />
+
       {/* SPLASH SCREEN OVERLAY */}
       <div 
         className={`fixed inset-0 z-[100] bg-[#111111] flex items-center justify-center transition-opacity duration-700 ease-in-out ${isLoading ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
@@ -137,7 +202,12 @@ const App: React.FC = () => {
       
       {/* Content */}
       <div className="relative z-10 flex flex-col min-h-screen">
-        <Navbar onNavigate={handleNavigation} />
+        <Navbar 
+            onNavigate={handleNavigation} 
+            session={session}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
+            onSignOut={handleSignOut}
+        />
         
         <main className="flex-1">
           {currentPage === 'home' && (
@@ -162,6 +232,15 @@ const App: React.FC = () => {
             <Blogs onRead={() => handleNavigation('dev')} />
           )}
 
+          {currentPage === 'profile' && (
+            <ProfileDashboard 
+                session={session} 
+                onNavigate={handleNavigation} 
+                onSignOut={handleSignOut}
+                onOpenSession={handleOpenSession}
+            />
+          )}
+
           {/* New Pages */}
           {currentPage === 'contact' && <ContactUs onNavigate={() => handleNavigation('home')} />}
           {currentPage === 'security' && <Security onNavigate={handleNavigation} />}
@@ -177,4 +256,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-    

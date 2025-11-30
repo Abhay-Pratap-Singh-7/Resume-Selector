@@ -11,7 +11,7 @@ const FAQs: React.FC<FAQsProps> = ({ onNavigate }) => {
   const faqs = [
     {
       question: "How does the AI scoring model work?",
-      answer: "Our scoring model uses Gemini 1.5 Pro to analyze the semantic meaning of resumes against your specific job description. It doesn't just look for keywords; it evaluates the depth of experience, project complexity, and soft skills to generate a fit score from 0-100."
+      answer: "Our scoring model uses Gemini 2.5 Pro to analyze the semantic meaning of resumes against your specific job description. It doesn't just look for keywords; it evaluates the depth of experience, project complexity, and soft skills to generate a fit score from 0-100."
     },
     {
       question: "Is my data stored securely?",

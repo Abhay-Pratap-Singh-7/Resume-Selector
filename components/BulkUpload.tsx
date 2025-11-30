@@ -1,8 +1,12 @@
-import React, { useState, useRef } from 'react';
-import { UploadCloud, FileText, X, ArrowLeft, CheckCircle2, Loader2, Briefcase, AlertCircle, Play, Sparkles } from 'lucide-react';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { UploadCloud, FileText, X, ArrowLeft, CheckCircle2, Loader2, Briefcase, AlertCircle, Play, Sparkles, FolderPlus } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 interface BulkUploadProps {
   onBack: () => void;
+  session: any;
+  initialSessionId?: string | null;
 }
 
 // --- Types ---
@@ -10,7 +14,7 @@ type FileStatus = 'queued' | 'processing' | 'completed' | 'error';
 
 // Updated interface to match your FastAPI backend response
 interface AnalysisResult {
-  name: string;                // <-- NEW
+  name: string;
   pass_or_fail: string;
   score: number;
   explanation: string;
@@ -59,12 +63,71 @@ const uploadFileToBackend = async (file: File, jobRole: string): Promise<Analysi
 };
 
 
-const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
+const BulkUpload: React.FC<BulkUploadProps> = ({ onBack, session, initialSessionId }) => {
+  const [sessionName, setSessionName] = useState('');
   const [jobRole, setJobRole] = useState('');
   const [fileItems, setFileItems] = useState<FileItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(initialSessionId || null);
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // --- Load Existing Session if ID Provided ---
+  useEffect(() => {
+    if (initialSessionId) {
+        loadSessionData(initialSessionId);
+    }
+  }, [initialSessionId]);
+
+  const loadSessionData = async (id: string) => {
+      setIsLoadingSession(true);
+      try {
+          // 1. Get Session Details
+          const { data: sessData, error: sessError } = await supabase
+            .from('scan_sessions')
+            .select('*')
+            .eq('id', id)
+            .single();
+          
+          if (sessError) throw sessError;
+          if (sessData) {
+              setSessionName(sessData.session_name);
+              setJobRole(sessData.job_role);
+          }
+
+          // 2. Get Analyses
+          const { data: analyses, error: analysesError } = await supabase
+            .from('resume_analyses')
+            .select('*')
+            .eq('session_id', id);
+
+          if (analysesError) throw analysesError;
+
+          if (analyses) {
+              const items: FileItem[] = analyses.map((a: any) => ({
+                  id: a.id,
+                  // Create a dummy file object for display since we don't store the file itself
+                  file: new File([""], a.file_name, { type: "application/pdf" }), 
+                  status: 'completed',
+                  result: {
+                      name: a.candidate_name,
+                      pass_or_fail: a.pass_or_fail,
+                      score: a.score,
+                      explanation: a.explanation,
+                      strengths: a.strengths,
+                      weaknesses: a.weaknesses
+                  }
+              }));
+              setFileItems(items);
+          }
+      } catch (err) {
+          console.error("Failed to load session:", err);
+      } finally {
+          setIsLoadingSession(false);
+      }
+  };
 
   // --- File Handling ---
 
@@ -91,14 +154,16 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files) {
-      const validFiles = Array.from(e.dataTransfer.files).filter(file => file.type === 'application/pdf');
+      // Cast to ensure TS treats it as File array
+      const validFiles = Array.from(e.dataTransfer.files as unknown as File[]).filter((file: File) => file.type === 'application/pdf');
       addFiles(validFiles);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const validFiles = Array.from(e.target.files).filter(file => file.type === 'application/pdf');
+      // Cast to ensure TS treats it as File array
+      const validFiles = Array.from(e.target.files as unknown as File[]).filter((file: File) => file.type === 'application/pdf');
       addFiles(validFiles);
     }
   };
@@ -107,46 +172,99 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
     setFileItems(prev => prev.filter(item => item.id !== id));
   };
 
+  // --- Database Logic ---
+
+  const createSessionInDb = async (): Promise<string> => {
+    if (!session?.user) throw new Error("User not authenticated");
+    
+    // Create Session Record
+    const { data, error } = await supabase
+      .from('scan_sessions')
+      .insert({
+        user_id: session.user.id,
+        session_name: sessionName,
+        job_role: jobRole
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+        console.error("Supabase Insert Error:", error);
+        throw error;
+    }
+    return data.id;
+  };
+
+  const saveAnalysisToDb = async (sessId: string, result: AnalysisResult, fileName: string) => {
+    const { error } = await supabase
+      .from('resume_analyses')
+      .insert({
+        session_id: sessId,
+        candidate_name: result.name,
+        file_name: fileName,
+        score: result.score,
+        pass_or_fail: result.pass_or_fail,
+        explanation: result.explanation,
+        strengths: result.strengths,
+        weaknesses: result.weaknesses
+      });
+      
+    if (error) console.error("Failed to save analysis to DB:", error);
+  };
+
   // --- Processing Logic (One by One) ---
 
   const processQueue = async () => {
-    if (!jobRole) return;
+    if (!jobRole || !sessionName) return;
     setIsProcessing(true);
 
-    // Get all queued IDs at the start
-    const idsToProcess = fileItems
-        .filter(item => item.status === 'queued' || item.status === 'error')
-        .map(item => item.id);
+    try {
+        // 1. Create Session if not exists
+        let activeSessionId = sessionId;
+        if (!activeSessionId) {
+            activeSessionId = await createSessionInDb();
+            setSessionId(activeSessionId);
+        }
 
-    // Sequential Loop
-    for (const id of idsToProcess) {
-      // 1. Update status to PROCESSING
-      setFileItems(prev => prev.map(item => 
-        item.id === id ? { ...item, status: 'processing' } : item
-      ));
+        // Get all queued IDs at the start
+        const idsToProcess = fileItems
+            .filter(item => item.status === 'queued' || item.status === 'error')
+            .map(item => item.id);
 
-      // Get the current file object (from state ref not strictly necessary as file obj is stable)
-      const currentItem = fileItems.find(i => i.id === id);
-      
-      if (currentItem.file) {
-          try {
-            // 2. Call Backend (Waits for response)
-            const result = await uploadFileToBackend(currentItem.file, jobRole);
+        // Sequential Loop
+        for (const id of idsToProcess) {
+            // Update status to PROCESSING
+            setFileItems(prev => prev.map(item => 
+                item.id === id ? { ...item, status: 'processing' } : item
+            ));
+
+            const currentItem = fileItems.find(i => i.id === id);
             
-            // 3. Update status to COMPLETED with result immediately
-            setFileItems(prev => prev.map(item => 
-                item.id === id ? { ...item, status: 'completed', result } : item
-            ));
-          } catch (error) {
-            // 4. Handle Error
-            setFileItems(prev => prev.map(item => 
-                item.id === id ? { ...item, status: 'error', errorMessage: 'Analysis failed' } : item
-            ));
-          }
-      }
-      
-      // Short delay for visual smoothness between items
-      await new Promise(r => setTimeout(r, 200));
+            if (currentItem && currentItem.file) {
+                try {
+                    // Call Backend (Waits for response)
+                    const result = await uploadFileToBackend(currentItem.file, jobRole);
+                    
+                    // Save to DB
+                    await saveAnalysisToDb(activeSessionId, result, currentItem.file.name);
+
+                    // Update status to COMPLETED
+                    setFileItems(prev => prev.map(item => 
+                        item.id === id ? { ...item, status: 'completed', result } : item
+                    ));
+                } catch (error) {
+                    setFileItems(prev => prev.map(item => 
+                        item.id === id ? { ...item, status: 'error', errorMessage: 'Analysis failed' } : item
+                    ));
+                }
+            }
+            // Short delay
+            await new Promise(r => setTimeout(r, 200));
+        }
+    } catch (err: any) {
+        console.error("Session creation failed", err);
+        // Show specific error message instead of [object Object]
+        alert(`Failed to initialize session database: ${err.message || 'Unknown Error'}`);
     }
 
     setIsProcessing(false);
@@ -154,6 +272,14 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
 
   const completedCount = fileItems.filter(i => i.status === 'completed').length;
   const totalCount = fileItems.length;
+
+  if (isLoadingSession) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-[#111111] text-[#FFCB74]">
+              <Loader2 size={32} className="animate-spin" />
+          </div>
+      );
+  }
 
   return (
     <div className="min-h-screen bg-[#111111] text-[#F6F6F6] p-6 relative flex flex-col overflow-x-hidden">
@@ -167,24 +293,38 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
            {/* Header */}
            <div className="flex items-center justify-between mb-8">
                <button onClick={onBack} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group">
-                   <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back to Products
+                   <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> Back to Dashboard
                </button>
                <div className="text-right">
-                   <h1 className="text-2xl font-bold">Bulk Scanner</h1>
-                   <p className="text-xs text-gray-500">Sequential Analysis • Instant Results</p>
+                   <h1 className="text-2xl font-bold">{sessionId ? 'Session Details' : 'New Scan Session'}</h1>
+                   <p className="text-xs text-gray-500">Analysis results will be saved to your profile.</p>
                </div>
            </div>
 
            {/* TOP SECTION: Controls & Dropzone */}
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
                
-               {/* 1. Job Configuration */}
+               {/* 1. Job & Session Configuration */}
                <div className="lg:col-span-1 space-y-6">
                    <div className="bg-[#1a1a1a] border border-[#2F2F2F] rounded-2xl p-6">
                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                           <Briefcase size={18} className="text-[#FFCB74]" /> Job Context
+                           <FolderPlus size={18} className="text-[#FFCB74]" /> Session Details
                        </h3>
                        <div className="space-y-4">
+                           {/* Session Name Input */}
+                           <div>
+                               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Session Name</label>
+                               <input 
+                                   type="text" 
+                                   value={sessionName}
+                                   onChange={(e) => setSessionName(e.target.value)}
+                                   placeholder="e.g. Q4 Marketing Hires"
+                                   disabled={!!sessionId} // Disable if session started/loaded
+                                   className="w-full bg-[#111] border border-[#2F2F2F] rounded-lg py-3 px-4 text-white focus:border-[#FFCB74] focus:ring-1 focus:ring-[#FFCB74] outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                               />
+                           </div>
+
+                           {/* Job Role Input */}
                            <div>
                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Job Role</label>
                                <input 
@@ -192,14 +332,18 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
                                    value={jobRole}
                                    onChange={(e) => setJobRole(e.target.value)}
                                    placeholder="e.g. Senior Frontend Engineer"
-                                   className="w-full bg-[#111] border border-[#2F2F2F] rounded-lg py-3 px-4 text-white focus:border-[#FFCB74] focus:ring-1 focus:ring-[#FFCB74] outline-none transition-all"
+                                   disabled={!!sessionId} // Disable if session started/loaded
+                                   className="w-full bg-[#111] border border-[#2F2F2F] rounded-lg py-3 px-4 text-white focus:border-[#FFCB74] focus:ring-1 focus:ring-[#FFCB74] outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                />
                            </div>
-                           <div className="p-3 bg-[#FFCB74]/5 border border-[#FFCB74]/20 rounded-lg">
-                               <p className="text-xs text-[#FFCB74] leading-relaxed">
-                                   <strong>Config:</strong> Enter the role title to help the AI contextualize the resume scoring.
-                               </p>
-                           </div>
+                           
+                           {!sessionId && (
+                               <div className="p-3 bg-[#FFCB74]/5 border border-[#FFCB74]/20 rounded-lg">
+                                   <p className="text-xs text-[#FFCB74] leading-relaxed">
+                                       <strong>Note:</strong> Give your session a clear name so you can find these results later in your dashboard.
+                                   </p>
+                               </div>
+                           )}
                        </div>
                    </div>
 
@@ -221,9 +365,9 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
 
                             <button 
                                 onClick={processQueue}
-                                disabled={isProcessing || !jobRole}
+                                disabled={isProcessing || !jobRole || !sessionName}
                                 className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all 
-                                    ${isProcessing 
+                                    ${isProcessing || !jobRole || !sessionName
                                         ? 'bg-[#2F2F2F] text-gray-500 cursor-not-allowed' 
                                         : 'bg-[#FFCB74] hover:bg-[#eebb55] text-[#111111] shadow-lg hover:scale-[1.02]'
                                     }`}
@@ -231,7 +375,7 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
                                 {isProcessing ? (
                                     <><Loader2 size={18} className="animate-spin" /> Analyzing...</>
                                 ) : (
-                                    <><Play size={18} className="fill-current" /> Start Queue</>
+                                    <><Play size={18} className="fill-current" /> {sessionId && completedCount === totalCount ? 'Resume Queue (Completed)' : sessionId ? 'Resume Queue' : 'Start Session'}</>
                                 )}
                             </button>
                         </div>
@@ -365,7 +509,7 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
                                                <CheckCircle2 size={10} /> Strengths
                                            </span>
                                            <ul className="space-y-1.5">
-                                               {item.result?.strengths.slice(0, 3).map((p, i) => (
+                                               {item.result?.strengths?.slice(0, 3).map((p, i) => (
                                                    <li key={i} className="text-[10px] text-gray-300 flex items-start gap-2 bg-green-500/5 p-1.5 rounded border border-green-500/10">
                                                         {p}
                                                    </li>
@@ -377,7 +521,7 @@ const BulkUpload: React.FC<BulkUploadProps> = ({ onBack }) => {
                                                <AlertCircle size={10} /> Weaknesses
                                            </span>
                                             <ul className="space-y-1.5">
-                                               {item.result?.weaknesses.slice(0, 3).map((c, i) => (
+                                               {item.result?.weaknesses?.slice(0, 3).map((c, i) => (
                                                    <li key={i} className="text-[10px] text-gray-300 flex items-start gap-2 bg-red-500/5 p-1.5 rounded border border-red-500/10">
                                                         {c}
                                                    </li>

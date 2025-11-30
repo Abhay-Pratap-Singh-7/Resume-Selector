@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, FileText, CheckCircle2, XCircle, Search, Database, BarChart3, Cpu, Sparkles, Zap, Brain } from 'lucide-react';
-import ScrollReveal from './ScrollReveal';
 
 interface HeroProps {
   onNavigate: () => void;
@@ -144,31 +143,31 @@ const Hero: React.FC<HeroProps> = ({ onNavigate }) => {
     <section className="relative pt-32 pb-24 lg:pt-48 lg:pb-32 px-6 flex flex-col items-center justify-center text-center overflow-hidden">
       
       {/* Badge */}
-      <ScrollReveal delay={0.1} direction="down">
+      <div className="animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2F2F2F]/50 border border-[#FFCB74]/20 text-[#FFCB74] text-xs font-medium mb-8 backdrop-blur-sm hover:bg-[#2F2F2F]/80 transition-colors cursor-default">
             <span className="w-2 h-2 rounded-full bg-[#FFCB74] animate-pulse"></span>
-            <span>Powered by Gemini 1.5 Pro</span>
+            <span>Powered by Gemini 2.5 Pro</span>
             <ArrowRight size={12} />
         </div>
-      </ScrollReveal>
+      </div>
 
       {/* Headline */}
-      <ScrollReveal delay={0.2}>
+      <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 max-w-4xl mx-auto leading-[1.1]">
             Find the <span className="gold-gradient-text">Best Employees</span> <br />
             with Smart AI Ranking.
         </h1>
-      </ScrollReveal>
+      </div>
 
       {/* Subheadline */}
-      <ScrollReveal delay={0.3}>
+      <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
         <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
             Upload resumes in <span className="text-[#F6F6F6] font-medium">bulk</span> and let our <span className="text-[#F6F6F6] font-medium">Gemini-powered engine</span> provide detailed <span className="text-[#F6F6F6] font-medium">Pros & Cons</span> analysis instantly.
         </p>
-      </ScrollReveal>
+      </div>
 
       {/* Buttons */}
-      <ScrollReveal delay={0.4}>
+      <div className="animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
         <div className="flex flex-col sm:flex-row items-center gap-4 mb-20">
             <button onClick={onNavigate} className="bg-[#FFCB74] hover:bg-[#eebb55] text-[#111111] px-8 py-3.5 rounded-full font-semibold transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_-5px_rgba(255,203,116,0.3)] hover:shadow-[0_0_30px_-5px_rgba(255,203,116,0.5)]">
             Start Bulk Scanning
@@ -177,10 +176,10 @@ const Hero: React.FC<HeroProps> = ({ onNavigate }) => {
             See Sample Report <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
             </button>
         </div>
-      </ScrollReveal>
+      </div>
 
       {/* DASHBOARD VISUALIZATION */}
-      <ScrollReveal delay={0.6} direction="up" distance={50} className="w-full max-w-6xl mx-auto">
+      <div className="w-full max-w-6xl mx-auto animate-slide-up" style={{ animationDelay: '0.6s' }}>
         <div className="relative w-full h-[680px] md:h-[600px] glass-card rounded-3xl border border-[#2F2F2F] p-2 md:p-3 hover:border-[#FFCB74]/30 transition-colors duration-500 overflow-hidden shadow-2xl">
             
             {/* Background Grid Texture */}
@@ -447,7 +446,7 @@ const Hero: React.FC<HeroProps> = ({ onNavigate }) => {
 
             </div>
         </div>
-      </ScrollReveal>
+      </div>
 
     </section>
   );

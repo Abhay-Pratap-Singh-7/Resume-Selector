@@ -1,13 +1,18 @@
+
 import React, { useState, useEffect } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, User, LogOut } from 'lucide-react';
 
 interface NavbarProps {
   onNavigate: (page: string) => void;
+  session: any;
+  onOpenAuth: () => void;
+  onSignOut: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ onNavigate }) => {
+const Navbar: React.FC<NavbarProps> = ({ onNavigate, session, onOpenAuth, onSignOut }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -38,14 +43,42 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate }) => {
           <button onClick={() => onNavigate('blog')} className="hover:text-[#F6F6F6] hover:scale-105 transition-all">Blog</button>
         </div>
 
-        {/* CTA */}
+        {/* Auth / CTA */}
         <div className="hidden md:flex items-center gap-6 text-sm font-medium">
-          <button
-            onClick={() => onNavigate('dev')}
-            className="bg-[#2F2F2F] hover:bg-[#FFCB74] hover:text-[#111111] text-[#F6F6F6] px-5 py-2 rounded-full border border-[#444] hover:border-[#FFCB74] transition-all duration-300"
-          >
-            Sign In
-          </button>
+          {session ? (
+              <div className="relative">
+                  <button 
+                    onClick={() => setProfileOpen(!profileOpen)}
+                    className="flex items-center gap-2 bg-[#1a1a1a] border border-[#2F2F2F] pl-3 pr-4 py-1.5 rounded-full hover:border-[#FFCB74] transition-all"
+                  >
+                      <div className="w-6 h-6 rounded-full bg-[#FFCB74] text-black flex items-center justify-center font-bold text-xs">
+                          {session.user.email?.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-gray-300 text-xs">Account</span>
+                  </button>
+
+                  {/* Dropdown */}
+                  {profileOpen && (
+                      <div className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a1a] border border-[#2F2F2F] rounded-xl shadow-2xl py-2 animate-fade-in-up">
+                          <div className="px-4 py-2 border-b border-[#2F2F2F] mb-1">
+                              <p className="text-xs text-gray-500">Signed in as</p>
+                              <p className="text-xs font-bold text-white truncate">{session.user.email}</p>
+                          </div>
+                          <button onClick={() => { onNavigate('profile'); setProfileOpen(false); }} className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-[#2F2F2F] hover:text-[#FFCB74]">Dashboard</button>
+                          <button onClick={() => { onSignOut(); setProfileOpen(false); }} className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-[#2F2F2F] flex items-center gap-2">
+                              <LogOut size={12} /> Sign Out
+                          </button>
+                      </div>
+                  )}
+              </div>
+          ) : (
+            <button
+                onClick={onOpenAuth}
+                className="bg-[#2F2F2F] hover:bg-[#FFCB74] hover:text-[#111111] text-[#F6F6F6] px-5 py-2 rounded-full border border-[#444] hover:border-[#FFCB74] transition-all duration-300"
+            >
+                Sign In
+            </button>
+          )}
         </div>
 
         {/* Mobile Toggle */}
@@ -64,7 +97,15 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate }) => {
           <button onClick={() => { onNavigate('pricing'); setMobileMenuOpen(false); }} className="text-left text-gray-300 hover:text-[#FFCB74]">Pricing</button>
           <button onClick={() => { onNavigate('blog'); setMobileMenuOpen(false); }} className="text-left text-gray-300 hover:text-[#FFCB74]">Blog</button>
           <hr className="border-[#2F2F2F]" />
-          <button onClick={() => { onNavigate('dev'); setMobileMenuOpen(false); }} className="text-center w-full py-2 bg-[#2F2F2F] rounded-lg text-[#F6F6F6]">Sign In</button>
+          {session ? (
+             <>
+                 <div className="text-xs text-gray-500 px-2 mb-2">Logged in as {session.user.email}</div>
+                 <button onClick={() => { onNavigate('profile'); setMobileMenuOpen(false); }} className="text-center w-full py-2 bg-[#2F2F2F] rounded-lg text-[#F6F6F6]">Dashboard</button>
+                 <button onClick={() => { onSignOut(); setMobileMenuOpen(false); }} className="text-center w-full py-2 border border-red-500/30 text-red-400 rounded-lg">Sign Out</button>
+             </>
+          ) : (
+            <button onClick={() => { onOpenAuth(); setMobileMenuOpen(false); }} className="text-center w-full py-2 bg-[#2F2F2F] rounded-lg text-[#F6F6F6]">Sign In</button>
+          )}
         </div>
       )}
     </nav>
